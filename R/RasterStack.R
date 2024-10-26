@@ -23,14 +23,18 @@ library(terra)
 ###########################################
 
 #Reading in Drone imagery 
+getwd()
+#drone_dtm <- rast("data/tif/drone_dtm_focal.tif") #This layer was made in Moffat_Random_Forest_Sellers to remove NAs using focal smoothing
+drone_dsm <- rast("../../PB_data/overview_rgb/PheasantBranch_DEM.tif")
+drone_rgb <- rast("../../PB_data/overview_rgb/PheasantBranch_RGB3cm.tif") #This layer was mad3 in Moffat_Random_Forest_Sellers to resample RGB to the resolution of DSM and DTM (10cm)
 
-drone_dtm <- rast("data/tif/drone_dtm_focal.tif") #This layer was made in Moffat_Random_Forest_Sellers to remove NAs using focal smoothing
-drone_dsm <- rast("data/tif/drone_dsm_focal.tif") #This layer was made in Moffat_Random_Forest_Sellers to remove NAs using focal smoothing
-drone_rgb <- rast("data/tif/drone_rgb10cm.tif") #This layer was mad3 in Moffat_Random_Forest_Sellers to resample RGB to the resolution of DSM and DTM (10cm)
+#resample RGB to match resolution of DSM
+#drone_rgb <- resample(drone_rgb, drone_dsm, threads = T)
+#writeRaster(drone_rgb, "../../PB_data/overview_rgb/PheasantBranch_RGB3cm.tif")
 
 # Renaming Bands
 names(drone_rgb) <- c("red","green", "blue", "alpha")
-names(drone_dtm) <- "dtm"
+#names(drone_dtm) <- "dtm"
 names(drone_dsm) <- "dsm"
 
 # Defining RGB Vegetation Indices
@@ -52,19 +56,19 @@ CHM <- drone_dsm - drone_dtm
 ###########################################
 
 # Using terra's built in terrain characteristics function to get TPI, TRI, and Roughness from drone DSM
-terrain_metrics <- terrain(drone_dsm, v=c("TRI", "TPI", "roughness"), neighbors = 8, filename="data/tif/terrain.tif")
+terrain_metrics <- terrain(drone_dsm, v=c("TRI", "TPI", "roughness"), neighbors = 8)
 
 ###########################################
 ###     Step 3: Stack  Rasters          ###
 ###########################################
 
 # Stack all of the layers together
-drone_stack <- c(drone_rgb, drone_dsm, drone_dtm, CHM, terrain_metrics$TRI, terrain_metrics$TPI,
+drone_stack <- c(drone_rgb, drone_dsm, terrain_metrics$TRI, terrain_metrics$TPI,
                  terrain_metrics$roughness, VDVI, NGRDI, VARI, GRRI)
 
 #rename the drone layer names
-names(drone_stack) <- c("r", "g", "b", "alpha", "dsm", "dtm", "chm", "tri", "tpi",
+names(drone_stack) <- c("r", "g", "b", "alpha", "dsm", "tri", "tpi",
                         "roughness", "vdvi", "ngrdi", "vari", "grri")
 
 # Write Drone stack raster
-writeRaster(drone_stack, "data/tif/drone_stack10cm.tif", overwrite = TRUE)
+writeRaster(drone_stack, "../../PB_data/overview_rgb/dronestack_3cm.tif", overwrite = TRUE)
