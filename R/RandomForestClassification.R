@@ -4,6 +4,11 @@
 # install.packages("randomForest")
 # install.packages("caret")
 # install.packages("dplyr")
+# install.packages("ggplot2")
+# install.packages("whitebox")
+## Need this line to run whitebox, downloades files locally
+# whitebox::install_whitebox()
+
 
 # Load libraries
 library(terra)
@@ -12,6 +17,7 @@ library(dplyr)
 library(randomForest)
 library(ggplot2)
 library(caret)
+library(whitebox)
 
 ###WHAT WE WANT THIS SCRIPT TO DO###
 #1. Read in all shapefile data, assign classes, and merge into one shapefile.
@@ -22,20 +28,30 @@ library(caret)
 
 ### Input file paths
 
-#path to Develop Data folder (seperate from github repo due to size of tif files & privacy)
-develop_data <- normalizePath(file.path(wd, "..", "..", "DEVELOP_data"), winslash = "/")
+#path to UAV Data folder (seperate from github repo due to size of tif files & privacy)
+wd <- getwd()
+wd
+UAV_data <- file.path(wd, "..", "..", "PB_data/overview_rgb")
 
 #path to training polygon folders
-bareground_shapefiles <- file.path(develop_data, "shp", "TrainingPolygons", "1_BareGroundTrainingData", winslash = "/")
-grass_shapefiles <- file.path(develop_data, "shp", "TrainingPolygons", "2_GrassTrainingData", winslash = "/")
-shrub_shapefiles <- file.path(develop_data, "shp", "TrainingPolygons", "3_ShrubTrainingData", winslash = "/")
+LBVeg_poly <- st_read(file.path(UAV_data, "shp", "PB_training", "LightBrownVeg", winslash = "/"))
+LGVEG_poly <- st_read(file.path(UAV_data, "shp", "PB_training", "LightGreenVeg", winslash = "/"))
+Shrubs_poly <- st_read(file.path(UAV_data, "shp", "PB_training", "Shrubs", winslash = "/"))
+EmVEG_poly <- st_read(file.path(UAV_data, "shp", "PB_training", "EmergentVeg", winslash = "/"))
+Water_poly <- st_read(file.path(UAV_data, "shp", "PB_training", "Water", winslash = "/"))
+phrag_poly <- st_read(file.path(UAV_data, "shp", "PB_training", "Phrag", winslash = "/"))
+rice_poly <-  st_read(file.path(UAV_data, "shp", "PB_training", "Rice", winslash = "/"))
+
+
+
+#shrub_shapefiles <- file.path(develop_data, "shp", "TrainingPolygons", "3_ShrubTrainingData", winslash = "/")
 
 #path to drone map files
-drone_stack <- rast(file.path(develop_data, "Drone", "camblin_stack.tif"))
+drone_stack <- rast(file.path(UAV_data, "tif", "dronestack_3cm.tif"))
 
 ### Output File Paths
 
-RF_outputs <- file.path("data/RF_outputs/Camblin_full")
+RF_outputs <- file.path(UAV_data, "tif", "RF_outputs")
 
 # Variable for todays dat to label RF outputs
 current_date <- format(Sys.Date(), "%Y-%m-%d")
@@ -45,34 +61,27 @@ current_date <- format(Sys.Date(), "%Y-%m-%d")
 ### Step 1. Merging Training Data Shapefiles ###         
 ################################################
 
-# Source the Drone_funcitons.R script which contains the read_and_merge_polygons() function
-getwd()
-source("Drone_functions.R")
-
-# Create a list of each training polygon type (Shrubs, Grass, Bare Ground) 
-bareground_files <- list.files("C:/Ben_wd/DEVELOP/repos/DEVELOP_data/shp/TrainingPolygons/1_BareGroundTrainingData", pattern = "\\.shp$", full.names = TRUE)
-grass_files <- list.files("C:/Ben_wd/DEVELOP/repos/DEVELOP_data/shp/TrainingPolygons/2_GrassTrainingData", pattern = "\\.shp$", full.names = TRUE)
-shrub_files <- list.files("C:/Ben_wd/DEVELOP/repos/DEVELOP_data/shp/TrainingPolygons/3_ShrubTrainingData", pattern = "\\.shp$", full.names = TRUE)
-grass_files
-
-#use the read_and_merge_polygons function to create a single training polygon layer for each class using the list of shapefiles provided
-bareground_poly <- read_and_merge_training_polygons(bareground_files)
-grass_poly <- read_and_merge_training_polygons(grass_files)
-shrub_poly <- read_and_merge_training_polygons(shrub_files)
-
 # Assign classes to landcover types
-bareground_poly$class <- 1
-grass_poly$class <- 2
-shrub_poly$class <- 3
+LBVeg_poly$class <- 1
+LGVEG_poly$class <- 2
+Shrubs_poly$class <- 3
+EmVEG_poly$class <- 4
+Water_poly$class <- 5
+phrag_poly$class <- 6
+rice_poly$class <- 7
+#select only the geometry and class columns from shapefiles (could make this a for loop)
+LBVeg_poly <- LBVeg_poly[, c("geometry", "class")]
+LGVEG_poly <- LGVEG_poly[, c("geometry", "class")]
+Shrubs_poly <- Shrubs_poly[, c("geometry", "class")]
+EmVEG_poly <- EmVEG_poly[, c("geometry", "class")]
+Water_poly <- Water_poly[, c("geometry", "class")]
+phrag_poly <- phrag_poly[, c("geometry", "class")]
+rice_poly <- rice_poly[, c("geometry", "class")]
 
-#select only the geometry and class columns from shapefiles
-bareground_poly_filtered <- bareground_poly[, c("geometry", "class")]
-grass_poly_filtered <- grass_poly[, c("geometry", "class")]
-shrub_poly_filtered <- shrub_poly[, c("geometry", "class")]
 
 # Combine shapefiles into one sf collection
-training_poly <- rbind(bareground_poly_filtered, grass_poly_filtered, shrub_poly_filtered)
-st_write(training_poly, "data/TrainingData/shp/TrainingPoly.shp", append = FALSE)
+training_poly <- rbind(LBVeg_poly, LGVEG_poly, Shrubs_poly, EmVEG_poly, Water_poly, rice_poly, phrag_poly)
+#st_write(training_poly, "data/TrainingData/shp/TrainingPoly.shp", append = FALSE)
 plot(training_poly)
 
 #make a column for row number so we can join to training data later
@@ -116,7 +125,8 @@ table(extracted_val_values$class)
 ####################################
 ### Step 3. Creation of RF Model ###
 ####################################
-
+extracted_cal_values
+extracted_val_values
 #Making the class column a factor
 extracted_cal_values$class <- factor(extracted_cal_values$class)
 extracted_val_values$class <- factor(extracted_val_values$class)
@@ -125,7 +135,7 @@ str(extracted_val_values)
 extracted_cal_values
 
 # Define predictor variables for modeling
-x_data <- extracted_cal_values[1:14]
+x_data <- extracted_cal_values[1:13]
 x_data <- subset(x_data, select= -c(ID,alpha))
 head(x_data)
 
@@ -159,18 +169,27 @@ varImpPlot(rf_Camblin, main = 'Band Importance')
 tif_count <- length(list.files(RF_outputs, pattern = "\\.tif$", full.names = TRUE))+1
 tif_count
 ### Running RF on the entire camblin ranch drone map
-output_filename <- file.path(RF_outputs, paste0("CamblinFull", tif_count,'_', current_date, ".tif"))
+output_filename <- file.path(RF_outputs, paste0("PheasantBranch", tif_count,'_', current_date, ".tif"))
 output_filename
+#if getting error that NAs exitst, run code below
+drone_stack[is.na(drone_stack)] <- 0
 map <- predict(drone_stack, type='response', rf_Camblin, filename=output_filename, format="GTiff", overwrite=TRUE)
 plot(map)
-#if getting error that NAs exitst, run code below then re run line 160
-#drone_stack[is.na(drone_stack)] <- 0
+
+# Define a majority function that handles NA values
+whitebox::wbt_majority_filter(map, file.path(UAV_data, "tif", "RF_outputs", "majority_filter.tif"), filterx = 11, filtery = 11,
+                verbose_mode = FALSE)
+
+# Apply the majority filter with focal()
+filtered_raster <- focal(map, w = matrix(1, nrow = window_size, ncol = window_size), fun = majority_function)
+
 #writeRaster(drone_stack, "data/tif/camblin_stack_noNA.tif", overwrite = TRUE)
 
 #######################################################
 ### Step 5. Accuracy assement using validation data ###
 #######################################################
-
+validation
+calibration
 # Defining Calibration and Validation shapefiles
 validation <- vect(extracted_val_values[, c("class", "x", "y")],geom = c("x", "y"))
 calibration <- vect(extracted_cal_values[, c("class", "x", "y")], geom = c("x", "y"))
@@ -207,10 +226,10 @@ plot <- ggplot(hm, aes(x = Prediction, y = Reference, fill = Freq)) +
 
 # reorder quadrants
 plot +
-  scale_x_discrete(limits = c("1", "2", "3"),
-                   labels = c("Bare Ground", "Grass/Forb", "Shrub")) +
-  scale_y_discrete(limits = c("1", "2", "3"),
-                   labels = c("Bare Ground", "Grass/Forb", "Shrub")) +
+  scale_x_discrete(limits = as.character(1:7),
+                   labels = c("light green", "light brown", "shrubs", "emergent", "Water", "Phrag", "rice")) +
+  scale_y_discrete(limits = as.character(1:7),
+                   labels = c("light green", "light brown", "shrubs", "emergent", "Water", "Phrag", "rice")) +
   # following lines only increase text size (optional)
   theme(axis.text.x = element_text(size = 20),
         axis.text.y = element_text(size = 20),

@@ -26,11 +26,22 @@ library(terra)
 getwd()
 #drone_dtm <- rast("data/tif/drone_dtm_focal.tif") #This layer was made in Moffat_Random_Forest_Sellers to remove NAs using focal smoothing
 drone_dsm <- rast("../../PB_data/overview_rgb/PheasantBranch_DEM.tif")
-drone_rgb <- rast("../../PB_data/overview_rgb/PheasantBranch_RGB3cm.tif") #This layer was mad3 in Moffat_Random_Forest_Sellers to resample RGB to the resolution of DSM and DTM (10cm)
+drone_rgb <- rast("E:/CoveringGround/repos/PB_data/overview_rgb/tif/PheasantBranch_RGB3cm.tif") #This layer was mad3 in Moffat_Random_Forest_Sellers to resample RGB to the resolution of DSM and DTM (10cm)
 
-#resample RGB to match resolution of DSM
-#drone_rgb <- resample(drone_rgb, drone_dsm, threads = T)
+#resample RGB to match resolution of DSM or...
+drone_rgb <- resample(drone_rgb, res = 0.1, method="bilinear", threads = T)
 #writeRaster(drone_rgb, "../../PB_data/overview_rgb/PheasantBranch_RGB3cm.tif")
+
+#Resample to the resolution that you want
+# Define the target resolution 
+target_res <- 0.1
+
+# Create a new raster with the same extent as `drone_stack` but with the target resolution
+template_raster <- rast(ext(drone_rgb), resolution = target_res, crs = crs(drone_rgb))
+
+#resample original raster
+drone_rgb10cm <- resample(drone_rgb, template_raster, method="bilinear", threads = T)
+writeRaster(drone_rgb10cm, "E:/CoveringGround/repos/PB_data/overview_rgb/PheasantBranch_RGB10cm.tif", overwrite = T)
 
 # Renaming Bands
 names(drone_rgb) <- c("red","green", "blue", "alpha")
